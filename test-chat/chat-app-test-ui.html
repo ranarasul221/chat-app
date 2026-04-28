@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anonymous Chat API Tester</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #f4f6f8;
+      color: #111827;
+    }
+
+    header {
+      background: #111827;
+      color: white;
+      padding: 18px 24px;
+    }
+
+    header h2 {
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    .card h3 {
+      margin-top: 0;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      margin: 10px 0 6px;
+      font-weight: 600;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    textarea {
+      min-height: 85px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background: #4b5563;
+    }
+
+    button.danger {
+      background: #dc2626;
+    }
+
+    button.success {
+      background: #16a34a;
+    }
+
+    button.warning {
+      background: #d97706;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #e5e7eb;
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .connected {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #d1fae5;
+      padding: 14px;
+      border-radius: 10px;
+      min-height: 240px;
+      max-height: 420px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    @media (max-width: 800px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h2>Anonymous Chat API Tester</h2>
+    <p class="small">Use this page to test login, rooms, REST messages, and Socket.io real-time events.</p>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h3>1. Server Config</h3>
+
+      <label>API Base URL</label>
+      <input id="apiBaseUrl" value="http://localhost:3000/api/v1" />
+
+      <label>Socket URL</label>
+      <input id="socketUrl" value="http://localhost:3000/chat" />
+
+      <p class="small">
+        For Railway, change these to your deployed URL. Example:
+        https://your-app.up.railway.app/api/v1 and https://your-app.up.railway.app/chat
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>2. Login</h3>
+
+      <label>Username</label>
+      <input id="username" value="rana_123" />
+
+      <button onclick="login()">Login / Get Session</button>
+
+      <label>Session Token</label>
+      <input id="sessionToken" placeholder="Session token will appear here" />
+
+      <label>User ID</label>
+      <input id="userId" placeholder="User ID will appear here" readonly />
+    </div>
+
+    <div class="card">
+      <h3>3. Rooms</h3>
+
+      <label>Room Name</label>
+      <input id="roomName" value="general" />
+
+      <div class="row">
+        <button onclick="createRoom()">Create Room</button>
+        <button class="secondary" onclick="listRooms()">List Rooms</button>
+        <button class="danger" onclick="deleteRoom()">Delete Current Room</button>
+      </div>
+
+      <label>Current Room ID</label>
+      <input id="roomId" placeholder="Room ID will appear here or paste manually" />
+
+      <button class="secondary" onclick="getRoomDetails()">Get Current Room Details</button>
+    </div>
+
+    <div class="card">
+      <h3>4. WebSocket</h3>
+
+      <div class="row">
+        <button class="success" onclick="connectSocket()">Connect Socket</button>
+        <button class="warning" onclick="leaveRoom()">Leave Room</button>
+        <button class="danger" onclick="disconnectSocket()">Disconnect</button>
+      </div>
+
+      <div id="socketStatus" class="status disconnected">Disconnected</div>
+
+      <p class="small">
+        After socket connect, send message from below. You should see message:new event in logs.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>5. Messages</h3>
+
+      <label>Message Content</label>
+      <textarea id="messageContent">Hello from test UI</textarea>
+
+      <div class="row">
+        <button onclick="sendMessage()">Send Message by REST</button>
+        <button class="secondary" onclick="getMessages()">Get Message History</button>
+      </div>
+
+      <label>Pagination Cursor before</label>
+      <input id="beforeCursor" placeholder="Optional message id cursor" />
+
+      <label>Limit</label>
+      <input id="messageLimit" value="50" />
+    </div>
+
+    <div class="card">
+      <h3>6. Quick Test Flow</h3>
+      <ol>
+        <li>Click <b>Login</b></li>
+        <li>Click <b>Create Room</b></li>
+        <li>Click <b>Connect Socket</b></li>
+        <li>Click <b>Send Message by REST</b></li>
+        <li>Check logs for <b>message:new</b></li>
+      </ol>
+      <p class="small">
+        For two-user test, open this HTML file in another browser tab, login with another username, then connect to same room ID.
+      </p>
+    </div>
+
+    <div class="card full">
+      <h3>Logs</h3>
+      <div class="row">
+        <button class="secondary" onclick="clearLogs()">Clear Logs</button>
+      </div>
+      <pre id="logs"></pre>
+    </div>
+  </div>
+
+  <script>
+    let socket = null;
+
+    function getApiBaseUrl() {
+      return document.getElementById("apiBaseUrl").value.trim();
+    }
+
+    function getSocketUrl() {
+      return document.getElementById("socketUrl").value.trim();
+    }
+
+    function getToken() {
+      return document.getElementById("sessionToken").value.trim();
+    }
+
+    function getRoomId() {
+      return document.getElementById("roomId").value.trim();
+    }
+
+    function log(title, data = null) {
+      const logs = document.getElementById("logs");
+      const time = new Date().toLocaleTimeString();
+      let output = `[${time}] ${title}`;
+
+      if (data !== null) {
+        output += "\n" + JSON.stringify(data, null, 2);
+      }
+
+      logs.textContent += output + "\n\n";
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById("logs").textContent = "";
+    }
+
+    function setSocketStatus(text, connected) {
+      const el = document.getElementById("socketStatus");
+      el.textContent = text;
+      el.className = connected ? "status connected" : "status disconnected";
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      };
+
+      const token = getToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${getApiBaseUrl()}${path}`, {
+        ...options,
+        headers,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        log(`HTTP ERROR ${response.status}`, data);
+        return data;
+      }
+
+      log(`${options.method || "GET"} ${path}`, data);
+      return data;
+    }
+
+    async function login() {
+      const username = document.getElementById("username").value.trim();
+
+      const res = await apiFetch("/login", {
+        method: "POST",
+        body: JSON.stringify({ username }),
+      });
+
+      if (res?.success) {
+        document.getElementById("sessionToken").value = res.data.sessionToken;
+        document.getElementById("userId").value = res.data.user.id;
+      }
+    }
+
+    async function createRoom() {
+      const name = document.getElementById("roomName").value.trim();
+
+      const res = await apiFetch("/rooms", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+
+      if (res?.success) {
+        document.getElementById("roomId").value = res.data.id;
+      }
+    }
+
+    async function listRooms() {
+      await apiFetch("/rooms");
+    }
+
+    async function getRoomDetails() {
+      const roomId = getRoomId();
+      if (!roomId) return log("Room ID is required");
+
+      await apiFetch(`/rooms/${roomId}`);
+    }
+
+    async function deleteRoom() {
+      const roomId = getRoomId();
+      if (!roomId) return log("Room ID is required");
+
+      await apiFetch(`/rooms/${roomId}`, {
+        method: "DELETE",
+      });
+    }
+
+    async function sendMessage() {
+      const roomId = getRoomId();
+      const content = document.getElementById("messageContent").value;
+
+      if (!roomId) return log("Room ID is required");
+
+      await apiFetch(`/rooms/${roomId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+    }
+
+    async function getMessages() {
+      const roomId = getRoomId();
+      const limit = document.getElementById("messageLimit").value || "50";
+      const before = document.getElementById("beforeCursor").value.trim();
+
+      if (!roomId) return log("Room ID is required");
+
+      let path = `/rooms/${roomId}/messages?limit=${encodeURIComponent(limit)}`;
+      if (before) {
+        path += `&before=${encodeURIComponent(before)}`;
+      }
+
+      const res = await apiFetch(path);
+
+      if (res?.success && res.data.nextCursor) {
+        document.getElementById("beforeCursor").value = res.data.nextCursor;
+      }
+    }
+
+    function connectSocket() {
+      const token = getToken();
+      const roomId = getRoomId();
+
+      if (!token) return log("Session token is required");
+      if (!roomId) return log("Room ID is required");
+
+      if (socket) {
+        socket.disconnect();
+      }
+
+      socket = io(getSocketUrl(), {
+        transports: ["websocket", "polling"],
+        query: {
+          token,
+          roomId,
+        },
+      });
+
+      socket.on("connect", () => {
+        setSocketStatus(`Connected: ${socket.id}`, true);
+        log("socket connected", { id: socket.id });
+      });
+
+      socket.on("disconnect", (reason) => {
+        setSocketStatus(`Disconnected: ${reason}`, false);
+        log("socket disconnected", { reason });
+      });
+
+      socket.on("connect_error", (error) => {
+        setSocketStatus("Connection error", false);
+        log("connect_error", { message: error.message });
+      });
+
+      socket.on("error", (error) => {
+        log("socket error", error);
+      });
+
+      socket.on("room:joined", (data) => {
+        log("room:joined", data);
+      });
+
+      socket.on("room:user_joined", (data) => {
+        log("room:user_joined", data);
+      });
+
+      socket.on("message:new", (data) => {
+        log("message:new", data);
+      });
+
+      socket.on("room:user_left", (data) => {
+        log("room:user_left", data);
+      });
+
+      socket.on("room:deleted", (data) => {
+        log("room:deleted", data);
+      });
+    }
+
+    function leaveRoom() {
+      if (!socket) return log("Socket is not connected");
+
+      socket.emit("room:leave");
+      log("room:leave emitted");
+    }
+
+    function disconnectSocket() {
+      if (!socket) return log("Socket is not connected");
+
+      socket.disconnect();
+      socket = null;
+      setSocketStatus("Disconnected", false);
+    }
+  </script>
+</body>
+</html>
